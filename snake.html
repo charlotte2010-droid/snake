@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Snake</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d0d0d;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas { display: block; }
+    #nameInput {
+      display: none;
+      position: fixed;
+      font-family: monospace;
+      font-size: 18px;
+      text-align: center;
+      background: #1a1a1a;
+      color: #fff;
+      border: 2px solid #ffe4e1;
+      padding: 6px 12px;
+      border-radius: 4px;
+      outline: none;
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<input id="nameInput" type="text" maxlength="12" placeholder="Dein Name" />
+<script>
+  const CELL    = 25;
+  const COLS    = 20;
+  const ROWS    = 20;
+  const SCORE_H = 40;
+  const W       = COLS * CELL;
+  const H       = ROWS * CELL + SCORE_H;
+
+  const SPEED = { easy: 160, medium: 100, hard: 55 };
+
+  const C = {
+    bg:    '#0d0d0d',
+    grid:  '#cccccc',
+    snake: '#ffe4e1',
+    fruit: '#e05555',
+    text:  '#ffffff',
+    dim:   '#666666',
+    wall:  '#4fc3f7',
+    gold:  '#ffd700',
+  };
+
+  const canvas    = document.getElementById('canvas');
+  const ctx       = canvas.getContext('2d');
+  const nameInput = document.getElementById('nameInput');
+  canvas.width  = W;
+  canvas.height = H;
+
+  let gameState, snake, dir, nextDir, fruit, wall, score, highscore, difficulty, loop, lastRank;
+
+  // ── Scores ─────────────────────────────────────────────────
+
+  function loadScores() {
+    try { return JSON.parse(localStorage.getItem('snake_scores') || '[]'); }
+    catch { return []; }
+  }
+
+  function saveScores(arr) {
+    localStorage.setItem('snake_scores', JSON.stringify(arr));
+  }
+
+  function qualifiesForTopTen(sc) {
+    if (sc <= 0) return false;
+    const list = loadScores();
+    return list.length < 10 || sc > list[list.length - 1].score;
+  }
+
+  function addScore(name, sc) {
+    const list = loadScores();
+    list.push({ name: name || 'AAA', score: sc });
+    list.sort((a, b) => b.score - a.score);
+    const rank = list.findIndex(e => e.name === name && e.score === sc) + 1;
+    list.splice(10);
+    saveScores(list);
+    return rank;
+  }
+
+  // ── Name input overlay ─────────────────────────────────────
+
+  function showNameInput() {
+    const rect = canvas.getBoundingClientRect();
+    nameInput.style.left = (rect.left + rect.width / 2 - 100) + 'px';
+    nameInput.style.top  = (rect.top  + rect.height / 2 + 20) + 'px';
+    nameInput.style.display = 'block';
+    nameInput.value = '';
+    nameInput.focus();
+  }
+
+  function hideNameInput() {
+    nameInput.style.display = 'none';
+  }
+
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const name = nameInput.value.trim() || 'AAA';
+      hideNameInput();
+      lastRank  = addScore(name, score);
+      highscore = loadScores()[0].score;
+      gameState = 'gameover';
+      render();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      hideNameInput();
+      gameState = 'gameover';
+      render();
+    }
+  });
+
+  // ── Game logic ─────────────────────────────────────────────
+
+  function init() {
+    const list = loadScores();
+    highscore  = list.length ? list[0].score : 0;
+    difficulty = 'medium';
+    gameState  = 'start';
+    render();
+  }
+
+  function startGame() {
+    snake    = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    dir      = { x: 1, y: 0 };
+    nextDir  = { x: 1, y: 0 };
+    score    = 0;
+    lastRank = null;
+    spawnWall();
+    spawnFruit();
+    gameState = 'playing';
+    clearInterval(loop);
+    loop = setInterval(tick, SPEED[difficulty]);
+    render();
+  }
+
+  function isOnWall(pos) {
+    if (!wall) return false;
+    return wall.type === 'row' ? pos.y === wall.index : pos.x === wall.index;
+  }
+
+  function spawnWall() {
+    let w;
+    do {
+      if (Math.random() < 0.5) {
+        w = { type: 'row', index: Math.floor(Math.random() * ROWS) };
+      } else {
+        w = { type: 'col', index: Math.floor(Math.random() * COLS) };
+      }
+    } while (snake.some(s => isOnWallCheck(w, s)));
+    wall = w;
+  }
+
+  function isOnWallCheck(w, pos) {
+    return w.type === 'row' ? pos.y === w.index : pos.x === w.index;
+  }
+
+  function spawnFruit() {
+    let p;
+    do {
+      p = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+    } while (snake.some(s => s.x === p.x && s.y === p.y) || isOnWall(p));
+    fruit = p;
+  }
+
+  function tick() {
+    dir = { ...nextDir };
+    const head = {
+      x: (snake[0].x + dir.x + COLS) % COLS,
+      y: (snake[0].y + dir.y + ROWS) % ROWS,
+    };
+
+    if (snake.some(s => s.x === head.x && s.y === head.y) || isOnWall(head)) {
+      clearInterval(loop);
+      if (score > highscore) highscore = score;
+      if (qualifiesForTopTen(score)) {
+        gameState = 'nameinput';
+        render();
+        showNameInput();
+      } else {
+        gameState = 'gameover';
+        render();
+      }
+      return;
+    }
+
+    snake.unshift(head);
+    if (head.x === fruit.x && head.y === fruit.y) {
+      if (difficulty === 'easy')   score += 1;
+      if (difficulty === 'medium') score += 2;
+      if (difficulty === 'hard')   score += 3;
+      C.snake = randomColor();
+      if (score > highscore) highscore = score;
+      spawnFruit();
+    } else {
+      snake.pop();
+    }
+    render();
+  }
+
+  function randomColor() {
+    const hue = Math.floor(Math.random() * 360);
+    return `hsl(${hue}, 80%, 60%)`;
+  }
+
+  // ── Rendering ──────────────────────────────────────────────
+
+  function render() {
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    if (gameState === 'start') { drawStart(); return; }
+
+    drawHUD();
+    drawGrid();
+    drawFruit();
+    drawSnake();
+    drawWall();
+
+    if (gameState === 'paused')    drawOverlay('PAUSE', 'P oder Leertaste zum Fortsetzen');
+    if (gameState === 'nameinput') drawNamePrompt();
+    if (gameState === 'gameover')  drawGameOver();
+  }
+
+  function drawHUD() {
+    ctx.font      = '16px monospace';
+    ctx.fillStyle = C.text;
+    ctx.textAlign = 'left';
+    ctx.fillText('Score: ' + score, 10, 26);
+    ctx.textAlign = 'right';
+    ctx.fillText('Best: ' + highscore, W - 10, 26);
+  }
+
+  function drawGrid() {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = C.grid;
+    ctx.lineWidth   = 0.5;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * CELL, SCORE_H);
+      ctx.lineTo(x * CELL, H);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, SCORE_H + y * CELL);
+      ctx.lineTo(W, SCORE_H + y * CELL);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawWall() {
+    ctx.fillStyle = C.wall;
+    if (wall.type === 'row') {
+      for (let x = 0; x < COLS; x++) {
+        ctx.fillRect(x * CELL + 3, SCORE_H + wall.index * CELL + 3, CELL - 6, CELL - 6);
+      }
+    } else {
+      for (let y = 0; y < ROWS; y++) {
+        ctx.fillRect(wall.index * CELL + 3, SCORE_H + y * CELL + 3, CELL - 6, CELL - 6);
+      }
+    }
+  }
+
+  function drawFruit() {
+    ctx.fillStyle = C.fruit;
+    ctx.fillRect(fruit.x * CELL + 3, SCORE_H + fruit.y * CELL + 3, CELL - 6, CELL - 6);
+  }
+
+  function drawSnake() {
+    ctx.fillStyle = C.snake;
+    for (const s of snake) {
+      ctx.fillRect(s.x * CELL + 1, SCORE_H + s.y * CELL + 1, CELL - 2, CELL - 2);
+    }
+  }
+
+  function drawOverlay(title, sub) {
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(0, SCORE_H, W, ROWS * CELL);
+    ctx.textAlign = 'center';
+    ctx.font      = 'bold 32px monospace';
+    ctx.fillStyle = C.text;
+    ctx.fillText(title, W / 2, H / 2);
+    ctx.font      = '15px monospace';
+    ctx.fillStyle = C.dim;
+    ctx.fillText(sub, W / 2, H / 2 + 36);
+  }
+
+  function drawNamePrompt() {
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, SCORE_H, W, ROWS * CELL);
+    ctx.textAlign = 'center';
+    ctx.font      = 'bold 28px monospace';
+    ctx.fillStyle = C.gold;
+    ctx.fillText('TOP 10!', W / 2, H / 2 - 50);
+    ctx.font      = '20px monospace';
+    ctx.fillStyle = C.text;
+    ctx.fillText('Score: ' + score, W / 2, H / 2 - 16);
+    ctx.font      = '14px monospace';
+    ctx.fillStyle = C.dim;
+    ctx.fillText('Name eingeben und ENTER drücken', W / 2, H / 2 + 22);
+  }
+
+  function drawGameOver() {
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, SCORE_H, W, ROWS * CELL);
+    ctx.textAlign = 'center';
+
+    ctx.font      = 'bold 36px monospace';
+    ctx.fillStyle = C.fruit;
+    ctx.fillText('GAME OVER', W / 2, H / 2 - 50);
+
+    ctx.font      = '22px monospace';
+    ctx.fillStyle = C.text;
+    ctx.fillText('Score: ' + score, W / 2, H / 2 - 12);
+
+    if (lastRank !== null) {
+      ctx.font      = '16px monospace';
+      ctx.fillStyle = C.gold;
+      ctx.fillText('Platz ' + lastRank + ' in den Top 10!', W / 2, H / 2 + 22);
+    }
+
+    ctx.font      = '16px monospace';
+    ctx.fillStyle = C.dim;
+    ctx.fillText('[ R ] oder [ ENTER ] — Neustart', W / 2, H / 2 + 62);
+  }
+
+  // ── Start screen ───────────────────────────────────────────
+
+  const DIFFS   = ['easy', 'medium', 'hard'];
+  const DLABELS = ['Einfach', 'Mittel', 'Schwer'];
+
+  function diffButtonRect(i) {
+    const totalW = 3 * 110 + 2 * 20;
+    const startX = (W - totalW) / 2;
+    return { x: startX + i * 130, y: 390, w: 110, h: 32 };
+  }
+
+  function drawStart() {
+    ctx.textAlign = 'center';
+
+    ctx.font      = 'bold 42px monospace';
+    ctx.fillStyle = C.snake;
+    ctx.fillText('SNAKE', W / 2, 50);
+
+    ctx.font      = 'bold 13px monospace';
+    ctx.fillStyle = C.wall;
+    ctx.fillText('— TOP 10 —', W / 2, 76);
+
+    const list = loadScores();
+    for (let i = 0; i < 10; i++) {
+      const y = 96 + i * 19;
+      ctx.font      = '13px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = i === 0 ? C.gold : i < 3 ? '#c0c0c0' : C.dim;
+      const rank = String(i + 1).padStart(2, ' ');
+      if (list[i]) {
+        const name = list[i].name.substring(0, 10).padEnd(10, ' ');
+        ctx.fillText(`${rank}.  ${name}  ${list[i].score}`, 100, y);
+      } else {
+        ctx.fillStyle = '#333';
+        ctx.fillText(`${rank}.  —`, 100, y);
+      }
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font      = '17px monospace';
+    ctx.fillStyle = C.text;
+    ctx.fillText('Schwierigkeit:', W / 2, 362);
+
+    DIFFS.forEach((d, i) => {
+      const r   = diffButtonRect(i);
+      const sel = difficulty === d;
+      ctx.fillStyle   = sel ? C.snake : '#1a1a1a';
+      ctx.strokeStyle = sel ? C.snake : '#3a3a3a';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, 4);
+      ctx.fill();
+      if (!sel) ctx.stroke();
+      ctx.font      = '14px monospace';
+      ctx.fillStyle = sel ? C.bg : C.dim;
+      ctx.fillText(DLABELS[i], r.x + r.w / 2, r.y + 21);
+    });
+
+    ctx.font      = '13px monospace';
+    ctx.fillStyle = C.dim;
+    ctx.fillText('Steuerung: Pfeiltasten / WASD', W / 2, 444);
+    ctx.fillText('Pause: P oder Leertaste', W / 2, 462);
+
+    ctx.font      = 'bold 19px monospace';
+    ctx.fillStyle = C.text;
+    ctx.fillText('[ ENTER ] Starten', W / 2, 500);
+  }
+
+  // ── Input ──────────────────────────────────────────────────
+
+  document.addEventListener('keydown', e => {
+    if (e.key === ' ') e.preventDefault();
+
+    if (gameState === 'nameinput') return;
+
+    if (gameState === 'start') {
+      if (e.key === 'Enter') { startGame(); return; }
+      const idx = DIFFS.indexOf(difficulty);
+      if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A')
+        difficulty = DIFFS[(idx - 1 + 3) % 3];
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D')
+        difficulty = DIFFS[(idx + 1) % 3];
+      render();
+      return;
+    }
+
+    if (gameState === 'playing') {
+      switch (e.key) {
+        case 'ArrowUp':    case 'w': case 'W':
+          if (dir.y !==  1) nextDir = { x: 0,  y: -1 }; break;
+        case 'ArrowDown':  case 's': case 'S':
+          if (dir.y !== -1) nextDir = { x: 0,  y:  1 }; break;
+        case 'ArrowLeft':  case 'a': case 'A':
+          if (dir.x !==  1) nextDir = { x: -1, y:  0 }; break;
+        case 'ArrowRight': case 'd': case 'D':
+          if (dir.x !== -1) nextDir = { x:  1, y:  0 }; break;
+        case 'p': case 'P': case ' ':
+          clearInterval(loop);
+          gameState = 'paused';
+          render();
+          break;
+      }
+      return;
+    }
+
+    if (gameState === 'paused' && (e.key === 'p' || e.key === 'P' || e.key === ' ')) {
+      gameState = 'playing';
+      loop = setInterval(tick, SPEED[difficulty]);
+      render();
+      return;
+    }
+
+    if (gameState === 'gameover' && (e.key === 'Enter' || e.key === 'r' || e.key === 'R')) {
+      gameState = 'start';
+      render();
+      return;
+    }
+  });
+
+  canvas.addEventListener('click', e => {
+    if (gameState !== 'start') return;
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const scaleY = H / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top)  * scaleY;
+    DIFFS.forEach((d, i) => {
+      const r = diffButtonRect(i);
+      if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+        difficulty = d;
+        render();
+      }
+    });
+  });
+
+  init();
+</script>
+</body>
+</html>
