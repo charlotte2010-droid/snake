@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -33,7 +33,7 @@
 </head>
 <body>
 <canvas id="canvas"></canvas>
-<input id="nameInput" type="text" maxlength="12" placeholder="Dein Name" />
+<input id="nameInput" type="text" maxlength="12" placeholder="Your Name" />
 <script>
   const CELL    = 25;
   const COLS    = 28;
@@ -258,7 +258,7 @@
     drawSnake();
     drawWall();
 
-    if (gameState === 'paused')    drawOverlay('PAUSE', 'P oder Leertaste zum Fortsetzen');
+    if (gameState === 'paused')    drawOverlay('PAUSE', 'Press P or Space to resume');
     if (gameState === 'nameinput') drawNamePrompt();
     if (gameState === 'gameover')  drawGameOver();
   }
@@ -346,7 +346,7 @@
     ctx.fillText('Score: ' + score, W / 2, H / 2 - 16);
     ctx.font      = '14px monospace';
     ctx.fillStyle = C.dim;
-    ctx.fillText('Name eingeben und ENTER drücken', W / 2, H / 2 + 22);
+    ctx.fillText('Type your name and press ENTER', W / 2, H / 2 + 22);
   }
 
   function drawGameOver() {
@@ -365,18 +365,18 @@
     if (lastRank !== null) {
       ctx.font      = '16px monospace';
       ctx.fillStyle = C.gold;
-      ctx.fillText('Platz ' + lastRank + ' in den Top 10!', W / 2, H / 2 + 22);
+      ctx.fillText('Rank ' + lastRank + ' in the Top 10!', W / 2, H / 2 + 22);
     }
 
     ctx.font      = '16px monospace';
     ctx.fillStyle = C.dim;
-    ctx.fillText('[ R ] / [ ENTER ] / Tippen — Neustart', W / 2, H / 2 + 62);
+    ctx.fillText('[ R ] / [ ENTER ] / Tap — Restart', W / 2, H / 2 + 62);
   }
 
   // ── Start screen ───────────────────────────────────────────
 
   const DIFFS   = ['easy', 'medium', 'hard'];
-  const DLABELS = ['Einfach', 'Mittel', 'Schwer'];
+  const DLABELS = ['Easy', 'Medium', 'Hard'];
 
   function diffButtonRect(i) {
     const totalW = 3 * 110 + 2 * 20;
@@ -439,7 +439,7 @@
     // Difficulty
     ctx.font      = '17px monospace';
     ctx.fillStyle = C.text;
-    ctx.fillText('Schwierigkeit:', W / 2, 300);
+    ctx.fillText('Difficulty:', W / 2, 300);
 
     DIFFS.forEach((d, i) => {
       const r   = diffButtonRect(i);
@@ -459,14 +459,14 @@
     // Wall toggle
     ctx.font      = '17px monospace';
     ctx.fillStyle = C.text;
-    ctx.fillText('Wand:', W / 2, 390);
-    drawTwoButtons(['An', 'Aus'], wallEnabled ? 0 : 1, 410, false);
+    ctx.fillText('Wall:', W / 2, 390);
+    drawTwoButtons(['On', 'Off'], wallEnabled ? 0 : 1, 410, false);
 
     // Wall movement toggle
     ctx.font      = '17px monospace';
     ctx.fillStyle = wallEnabled ? C.text : '#444';
-    ctx.fillText('Wand bewegt sich:', W / 2, 462);
-    drawTwoButtons(['Ja', 'Nein'], wallMoving ? 0 : 1, 482, !wallEnabled);
+    ctx.fillText('Wall moves:', W / 2, 462);
+    drawTwoButtons(['Yes', 'No'], wallMoving ? 0 : 1, 482, !wallEnabled);
 
     // Points hint
     const pts = (difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3)
@@ -474,12 +474,12 @@
               + (wallEnabled && wallMoving ? 1 : 0);
     ctx.font      = '13px monospace';
     ctx.fillStyle = C.gold;
-    ctx.fillText('Punkte pro Frucht: ' + pts, W / 2, 535);
+    ctx.fillText('Points per fruit: ' + pts, W / 2, 535);
 
     // Controls
     ctx.fillStyle = C.dim;
-    ctx.fillText('Steuerung: Pfeiltasten / WASD / Wischen', W / 2, 560);
-    ctx.fillText('Pause: P oder Leertaste', W / 2, 578);
+    ctx.fillText('Controls: Arrow keys / WASD / Swipe', W / 2, 560);
+    ctx.fillText('Pause: P or Space', W / 2, 578);
 
     // Start button
     const sb = startButtonRect();
@@ -491,11 +491,11 @@
     ctx.fill();
     ctx.font      = 'bold 18px monospace';
     ctx.fillStyle = C.bg;
-    ctx.fillText('STARTEN', W / 2, sb.y + 26);
+    ctx.fillText('START', W / 2, sb.y + 26);
 
     ctx.font      = '12px monospace';
     ctx.fillStyle = C.dim;
-    ctx.fillText('oder [ ENTER ]', W / 2, sb.y + sb.h + 18);
+    ctx.fillText('or [ ENTER ]', W / 2, sb.y + sb.h + 18);
   }
 
   function startButtonRect() {
