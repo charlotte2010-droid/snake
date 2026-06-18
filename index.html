@@ -64,7 +64,7 @@
   canvas.width  = W;
   canvas.height = H;
 
-  let gameState, snake, dir, nextDir, fruit, wall, score, highscore, difficulty, loop, lastRank;
+  let gameState, snake, dir, nextDir, fruit, wall, score, highscore, difficulty, loop, lastRank, wallEnabled, wallMoving;
 
   // ── Scores ─────────────────────────────────────────────────
 
@@ -131,18 +131,23 @@
   function init() {
     const list = loadScores();
     highscore  = list.length ? list[0].score : 0;
-    difficulty = 'medium';
-    gameState  = 'start';
+    difficulty  = 'medium';
+    wallEnabled = true;
+    wallMoving  = true;
+    gameState   = 'start';
     render();
   }
 
   function startGame() {
-    snake    = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    const cx = Math.floor(COLS / 2);
+    const cy = Math.floor(ROWS / 2);
+    snake    = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
     dir      = { x: 1, y: 0 };
     nextDir  = { x: 1, y: 0 };
     score    = 0;
     lastRank = null;
-    spawnWall();
+    wall     = null;
+    if (wallEnabled) spawnWall();
     spawnFruit();
     gameState = 'playing';
     clearInterval(loop);
@@ -208,9 +213,10 @@
 
     snake.unshift(head);
     if (head.x === fruit.x && head.y === fruit.y) {
-      if (difficulty === 'easy')   score += 1;
-      if (difficulty === 'medium') score += 2;
-      if (difficulty === 'hard')   score += 3;
+      let pts = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+      if (wallEnabled) pts += 1;
+      if (wallEnabled && wallMoving) pts += 1;
+      score += pts;
       C.snake = randomColor();
       if (score > highscore) highscore = score;
       spawnFruit();
@@ -218,14 +224,16 @@
       snake.pop();
     }
 
-    wall.moveTick++;
-    if (wall.moveTick >= WALL_MOVE_EVERY) {
-      wall.moveTick = 0;
-      wall.index += wall.dir;
-      const maxIndex = wall.type === 'row' ? ROWS - 3 : COLS - 3;
-      if (wall.index <= 2)         { wall.index = 2;        wall.dir =  1; }
-      if (wall.index >= maxIndex)  { wall.index = maxIndex; wall.dir = -1; }
-      if (isOnWall(fruit)) spawnFruit();
+    if (wall && wallMoving) {
+      wall.moveTick++;
+      if (wall.moveTick >= WALL_MOVE_EVERY) {
+        wall.moveTick = 0;
+        wall.index += wall.dir;
+        const maxIndex = wall.type === 'row' ? ROWS - 3 : COLS - 3;
+        if (wall.index <= 2)        { wall.index = 2;        wall.dir =  1; }
+        if (wall.index >= maxIndex) { wall.index = maxIndex; wall.dir = -1; }
+        if (isOnWall(fruit)) spawnFruit();
+      }
     }
 
     render();
@@ -285,6 +293,7 @@
   }
 
   function drawWall() {
+    if (!wall) return;
     ctx.fillStyle = C.wall;
     if (wall.type === 'row') {
       for (let x = 0; x < COLS; x++) {
@@ -372,7 +381,30 @@
   function diffButtonRect(i) {
     const totalW = 3 * 110 + 2 * 20;
     const startX = (W - totalW) / 2;
-    return { x: startX + i * 130, y: 390, w: 110, h: 32 };
+    return { x: startX + i * 130, y: 328, w: 110, h: 32 };
+  }
+
+  function twoButtonRect(i, y) {
+    const btnW = 110, gap = 20;
+    const startX = (W - (2 * btnW + gap)) / 2;
+    return { x: startX + i * (btnW + gap), y, w: btnW, h: 30 };
+  }
+
+  function drawTwoButtons(labels, selectedIdx, y, dimmed) {
+    labels.forEach((label, i) => {
+      const r   = twoButtonRect(i, y);
+      const sel = selectedIdx === i && !dimmed;
+      ctx.fillStyle   = sel ? C.snake : '#1a1a1a';
+      ctx.strokeStyle = sel ? C.snake : (dimmed ? '#222' : '#3a3a3a');
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, 4);
+      ctx.fill();
+      if (!sel) ctx.stroke();
+      ctx.font      = '14px monospace';
+      ctx.fillStyle = sel ? C.bg : (dimmed ? '#333' : C.dim);
+      ctx.fillText(label, r.x + r.w / 2, r.y + 20);
+    });
   }
 
   function drawStart() {
@@ -403,9 +435,11 @@
     }
 
     ctx.textAlign = 'center';
+
+    // Difficulty
     ctx.font      = '17px monospace';
     ctx.fillStyle = C.text;
-    ctx.fillText('Schwierigkeit:', W / 2, 362);
+    ctx.fillText('Schwierigkeit:', W / 2, 300);
 
     DIFFS.forEach((d, i) => {
       const r   = diffButtonRect(i);
@@ -422,14 +456,34 @@
       ctx.fillText(DLABELS[i], r.x + r.w / 2, r.y + 21);
     });
 
+    // Wall toggle
+    ctx.font      = '17px monospace';
+    ctx.fillStyle = C.text;
+    ctx.fillText('Wand:', W / 2, 390);
+    drawTwoButtons(['An', 'Aus'], wallEnabled ? 0 : 1, 410, false);
+
+    // Wall movement toggle
+    ctx.font      = '17px monospace';
+    ctx.fillStyle = wallEnabled ? C.text : '#444';
+    ctx.fillText('Wand bewegt sich:', W / 2, 462);
+    drawTwoButtons(['Ja', 'Nein'], wallMoving ? 0 : 1, 482, !wallEnabled);
+
+    // Points hint
+    const pts = (difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3)
+              + (wallEnabled ? 1 : 0)
+              + (wallEnabled && wallMoving ? 1 : 0);
     ctx.font      = '13px monospace';
+    ctx.fillStyle = C.gold;
+    ctx.fillText('Punkte pro Frucht: ' + pts, W / 2, 535);
+
+    // Controls
     ctx.fillStyle = C.dim;
-    ctx.fillText('Steuerung: Pfeiltasten / WASD / Wischen', W / 2, 444);
-    ctx.fillText('Pause: P oder Leertaste', W / 2, 462);
+    ctx.fillText('Steuerung: Pfeiltasten / WASD / Wischen', W / 2, 560);
+    ctx.fillText('Pause: P oder Leertaste', W / 2, 578);
 
     ctx.font      = 'bold 19px monospace';
     ctx.fillStyle = C.text;
-    ctx.fillText('[ ENTER ] oder Tippen — Starten', W / 2, 500);
+    ctx.fillText('[ ENTER ] oder Tippen — Starten', W / 2, 630);
   }
 
   // ── Input ──────────────────────────────────────────────────
@@ -483,20 +537,38 @@
     }
   });
 
-  canvas.addEventListener('click', e => {
-    if (gameState !== 'start') return;
-    const rect   = canvas.getBoundingClientRect();
-    const scaleX = W / rect.width;
-    const scaleY = H / rect.height;
-    const mx = (e.clientX - rect.left) * scaleX;
-    const my = (e.clientY - rect.top)  * scaleY;
+  function handleStartScreenTap(mx, my) {
+    let handled = false;
     DIFFS.forEach((d, i) => {
       const r = diffButtonRect(i);
       if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-        difficulty = d;
-        render();
+        difficulty = d; handled = true;
       }
     });
+    [true, false].forEach((val, i) => {
+      const r = twoButtonRect(i, 410);
+      if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+        wallEnabled = val; handled = true;
+      }
+    });
+    if (wallEnabled) {
+      [true, false].forEach((val, i) => {
+        const r = twoButtonRect(i, 482);
+        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+          wallMoving = val; handled = true;
+        }
+      });
+    }
+    if (handled) render();
+    return handled;
+  }
+
+  canvas.addEventListener('click', e => {
+    if (gameState !== 'start') return;
+    const rect = canvas.getBoundingClientRect();
+    const mx   = (e.clientX - rect.left) * (W / rect.width);
+    const my   = (e.clientY - rect.top)  * (H / rect.height);
+    handleStartScreenTap(mx, my);
   });
 
   init();
@@ -531,7 +603,13 @@
     if (gameState === 'nameinput') return;
 
     if (gameState === 'gameover') { gameState = 'start'; render(); return; }
-    if (gameState === 'start')    { startGame(); return; }
+    if (gameState === 'start') {
+      const rect = canvas.getBoundingClientRect();
+      const mx   = (e.changedTouches[0].clientX - rect.left) * (W / rect.width);
+      const my   = (e.changedTouches[0].clientY - rect.top)  * (H / rect.height);
+      if (!handleStartScreenTap(mx, my)) startGame();
+      return;
+    }
     if (gameState === 'paused')   {
       gameState = 'playing';
       loop = setInterval(tick, SPEED[difficulty]);
