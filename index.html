@@ -291,10 +291,8 @@
   }
 
   function drawFruit() {
-    ctx.fillStyle = C.fruit;
-    ctx.fillRect(fruit.x * CELL + 3, SCORE_H + fruit.y * CELL + 3, CELL - 6, CELL - 6);
     ctx.save();
-    ctx.font          = '14px sans-serif';
+    ctx.font          = '16px sans-serif';
     ctx.textAlign     = 'center';
     ctx.textBaseline  = 'middle';
     ctx.fillText(fruit.emoji, fruit.x * CELL + CELL / 2, SCORE_H + fruit.y * CELL + CELL / 2);
