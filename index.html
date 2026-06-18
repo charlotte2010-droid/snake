@@ -481,9 +481,25 @@
     ctx.fillText('Steuerung: Pfeiltasten / WASD / Wischen', W / 2, 560);
     ctx.fillText('Pause: P oder Leertaste', W / 2, 578);
 
-    ctx.font      = 'bold 19px monospace';
-    ctx.fillStyle = C.text;
-    ctx.fillText('[ ENTER ] oder Tippen — Starten', W / 2, 630);
+    // Start button
+    const sb = startButtonRect();
+    ctx.fillStyle   = C.snake;
+    ctx.strokeStyle = C.snake;
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.roundRect(sb.x, sb.y, sb.w, sb.h, 6);
+    ctx.fill();
+    ctx.font      = 'bold 18px monospace';
+    ctx.fillStyle = C.bg;
+    ctx.fillText('STARTEN', W / 2, sb.y + 26);
+
+    ctx.font      = '12px monospace';
+    ctx.fillStyle = C.dim;
+    ctx.fillText('oder [ ENTER ]', W / 2, sb.y + sb.h + 18);
+  }
+
+  function startButtonRect() {
+    return { x: W / 2 - 100, y: 605, w: 200, h: 42 };
   }
 
   // ── Input ──────────────────────────────────────────────────
@@ -559,6 +575,10 @@
         }
       });
     }
+    const sb = startButtonRect();
+    if (mx >= sb.x && mx <= sb.x + sb.w && my >= sb.y && my <= sb.y + sb.h) {
+      startGame(); return true;
+    }
     if (handled) render();
     return handled;
   }
@@ -607,7 +627,7 @@
       const rect = canvas.getBoundingClientRect();
       const mx   = (e.changedTouches[0].clientX - rect.left) * (W / rect.width);
       const my   = (e.changedTouches[0].clientY - rect.top)  * (H / rect.height);
-      if (!handleStartScreenTap(mx, my)) startGame();
+      handleStartScreenTap(mx, my);
       return;
     }
     if (gameState === 'paused')   {
