@@ -64,7 +64,7 @@
   canvas.width  = W;
   canvas.height = H;
 
-  let gameState, snake, dir, nextDir, fruit, wall, score, highscore, difficulty, loop, lastRank, wallEnabled, wallMoving;
+  let gameState, snake, dir, nextDir, fruit, wall, score, highscore, difficulty, loop, lastRank, wallEnabled, wallMoving, countdownVal;
 
   // ── Scores ─────────────────────────────────────────────────
 
@@ -149,10 +149,19 @@
     wall     = null;
     if (wallEnabled) spawnWall();
     spawnFruit();
-    gameState = 'playing';
-    clearInterval(loop);
-    loop = setInterval(tick, SPEED[difficulty]);
+    countdownVal = 3;
+    gameState    = 'countdown';
     render();
+    const cd = setInterval(() => {
+      countdownVal--;
+      if (countdownVal <= 0) {
+        clearInterval(cd);
+        gameState = 'playing';
+        clearInterval(loop);
+        loop = setInterval(tick, SPEED[difficulty]);
+      }
+      render();
+    }, 1000);
   }
 
   function isOnWall(pos) {
@@ -258,6 +267,8 @@
     drawSnake();
     drawWall();
 
+    if (gameState === 'countdown') { drawCountdown(); return; }
+
     if (gameState === 'paused')    drawOverlay('PAUSE', 'Press P or Space to resume');
     if (gameState === 'nameinput') drawNamePrompt();
     if (gameState === 'gameover')  drawGameOver();
@@ -332,6 +343,17 @@
     ctx.font      = '15px monospace';
     ctx.fillStyle = C.dim;
     ctx.fillText(sub, W / 2, H / 2 + 36);
+  }
+
+  function drawCountdown() {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, SCORE_H, W, ROWS * CELL);
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font         = 'bold 120px monospace';
+    ctx.fillStyle    = C.snake;
+    ctx.fillText(countdownVal, W / 2, SCORE_H + (ROWS * CELL) / 2);
+    ctx.textBaseline = 'alphabetic';
   }
 
   function drawNamePrompt() {
@@ -507,7 +529,7 @@
   document.addEventListener('keydown', e => {
     if (e.key === ' ') e.preventDefault();
 
-    if (gameState === 'nameinput') return;
+    if (gameState === 'nameinput' || gameState === 'countdown') return;
 
     if (gameState === 'start') {
       if (e.key === 'Enter') { startGame(); return; }
