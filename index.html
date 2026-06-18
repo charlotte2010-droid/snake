@@ -43,6 +43,8 @@
 
   const SPEED = { easy: 160, medium: 100, hard: 55 };
 
+  const FRUIT_EMOJIS = ['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🍉','🍌','🥝','🍍','🫐'];
+
   const C = {
     bg:    '#0d0d0d',
     grid:  '#cccccc',
@@ -172,7 +174,7 @@
     do {
       p = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
     } while (snake.some(s => s.x === p.x && s.y === p.y) || isOnWall(p));
-    fruit = p;
+    fruit = { ...p, emoji: FRUIT_EMOJIS[Math.floor(Math.random() * FRUIT_EMOJIS.length)] };
   }
 
   function tick() {
@@ -279,6 +281,12 @@
   function drawFruit() {
     ctx.fillStyle = C.fruit;
     ctx.fillRect(fruit.x * CELL + 3, SCORE_H + fruit.y * CELL + 3, CELL - 6, CELL - 6);
+    ctx.save();
+    ctx.font          = '14px sans-serif';
+    ctx.textAlign     = 'center';
+    ctx.textBaseline  = 'middle';
+    ctx.fillText(fruit.emoji, fruit.x * CELL + CELL / 2, SCORE_H + fruit.y * CELL + CELL / 2);
+    ctx.restore();
   }
 
   function drawSnake() {
