@@ -42,6 +42,7 @@
   const H       = ROWS * CELL + SCORE_H;
 
   const SPEED = { easy: 160, medium: 100, hard: 55 };
+  const WALL_MOVE_EVERY = 5;
 
   const FRUIT_EMOJIS = ['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🍉','🍌','🥝','🍍','🫐'];
 
@@ -157,9 +158,9 @@
     let w;
     do {
       if (Math.random() < 0.5) {
-        w = { type: 'row', index: Math.floor(Math.random() * (ROWS - 4)) + 2 };
+        w = { type: 'row', index: Math.floor(Math.random() * (ROWS - 4)) + 2, dir: Math.random() < 0.5 ? 1 : -1, moveTick: 0 };
       } else {
-        w = { type: 'col', index: Math.floor(Math.random() * (COLS - 4)) + 2 };
+        w = { type: 'col', index: Math.floor(Math.random() * (COLS - 4)) + 2, dir: Math.random() < 0.5 ? 1 : -1, moveTick: 0 };
       }
     } while (snake.some(s => isOnWallCheck(w, s)));
     wall = w;
@@ -209,6 +210,17 @@
     } else {
       snake.pop();
     }
+
+    wall.moveTick++;
+    if (wall.moveTick >= WALL_MOVE_EVERY) {
+      wall.moveTick = 0;
+      wall.index += wall.dir;
+      const maxIndex = wall.type === 'row' ? ROWS - 3 : COLS - 3;
+      if (wall.index <= 2)         { wall.index = 2;        wall.dir =  1; }
+      if (wall.index >= maxIndex)  { wall.index = maxIndex; wall.dir = -1; }
+      if (isOnWall(fruit)) spawnFruit();
+    }
+
     render();
   }
 
