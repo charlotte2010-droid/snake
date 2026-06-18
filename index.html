@@ -155,6 +155,8 @@
   }
 
   function spawnWall() {
+    const MIN_DIST = 5;
+    const head = snake[0];
     let w;
     do {
       if (Math.random() < 0.5) {
@@ -162,7 +164,11 @@
       } else {
         w = { type: 'col', index: Math.floor(Math.random() * (COLS - 4)) + 2, dir: Math.random() < 0.5 ? 1 : -1, moveTick: 0 };
       }
-    } while (snake.some(s => isOnWallCheck(w, s)));
+    } while (
+      snake.some(s => isOnWallCheck(w, s)) ||
+      (w.type === 'row' && Math.abs(w.index - head.y) < MIN_DIST) ||
+      (w.type === 'col' && Math.abs(w.index - head.x) < MIN_DIST)
+    );
     wall = w;
   }
 
