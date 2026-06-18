@@ -155,9 +155,9 @@
     let w;
     do {
       if (Math.random() < 0.5) {
-        w = { type: 'row', index: Math.floor(Math.random() * ROWS) };
+        w = { type: 'row', index: Math.floor(Math.random() * (ROWS - 4)) + 2 };
       } else {
-        w = { type: 'col', index: Math.floor(Math.random() * COLS) };
+        w = { type: 'col', index: Math.floor(Math.random() * (COLS - 4)) + 2 };
       }
     } while (snake.some(s => isOnWallCheck(w, s)));
     wall = w;
