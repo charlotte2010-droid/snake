@@ -18,23 +18,29 @@
     #nameInput {
       display: none;
       position: fixed;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
       font-family: monospace;
-      font-size: 18px;
+      font-size: 22px;
       text-align: center;
       background: #1a1a1a;
       color: #fff;
       border: 2px solid #ffe4e1;
-      padding: 6px 12px;
-      border-radius: 4px;
+      padding: 12px 16px;
+      border-radius: 6px;
       outline: none;
-      width: 200px;
+      width: 260px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.8);
     }
   </style>
   <link rel="icon" href="logo.png" type="image/vnd.microsoft.icon">
 </head>
 <body>
 <canvas id="canvas"></canvas>
-<input id="nameInput" type="text" maxlength="12" placeholder="Your Name" />
+<input id="nameInput" type="text" maxlength="12" placeholder="Your Name"
+  autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" />
 <script>
   const CELL    = 25;
   const COLS    = 28;
@@ -46,7 +52,9 @@
   const SPEED = { easy: 160, medium: 100, hard: 55 };
   const WALL_MOVE_EVERY = 5;
 
-  const FRUIT_EMOJIS = ['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🍉','🍌','🥝','🍍','🫐'];
+  const FRUIT_EMOJIS    = ['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🍉','🍌','🥝','🍍','🫐'];
+  const FIREBALL_OPTS   = [0, 10, 15];
+  const FIREBALL_LABELS = ['Off', '10s', '15s'];
 
   const C = {
     bg:    '#0d0d0d',
@@ -65,7 +73,7 @@
   canvas.width  = W;
   canvas.height = H;
 
-  let gameState, snake, dir, nextDir, fruit, wall, score, highscore, difficulty, loop, lastRank, wallEnabled, wallMoving, countdownVal;
+  let gameState, snake, dir, nextDir, fruit, fireball, wall, score, highscore, difficulty, loop, lastRank, wallEnabled, wallMoving, countdownVal, fireballInterval, fireballTimerID, fireballMoveID;
 
   // ── Scores ─────────────────────────────────────────────────
 
@@ -108,9 +116,6 @@
   // ── Name input overlay ─────────────────────────────────────
 
   function showNameInput() {
-    const rect = canvas.getBoundingClientRect();
-    nameInput.style.left = (rect.left + rect.width / 2 - 100) + 'px';
-    nameInput.style.top  = (rect.top  + rect.height / 2 + 20) + 'px';
     nameInput.style.display = 'block';
     nameInput.value = '';
     nameInput.focus();
@@ -142,11 +147,12 @@
 
   async function init() {
     await loadScoresFromAPI();
-    highscore   = cachedScores.length ? cachedScores[0].score : 0;
-    difficulty  = 'medium';
-    wallEnabled = true;
-    wallMoving  = true;
-    gameState   = 'start';
+    highscore       = cachedScores.length ? cachedScores[0].score : 0;
+    difficulty      = 'medium';
+    wallEnabled     = true;
+    wallMoving      = true;
+    fireballInterval = 0;
+    gameState       = 'start';
     render();
   }
 
@@ -159,6 +165,8 @@
     score    = 0;
     lastRank = null;
     wall     = null;
+    fireball = null;
+    stopFireballTimer();
     if (wallEnabled) spawnWall();
     spawnFruit();
     countdownVal = 3;
@@ -171,6 +179,7 @@
         gameState = 'playing';
         clearInterval(loop);
         loop = setInterval(tick, SPEED[difficulty]);
+        startFireballTimer();
       }
       render();
     }, 1000);
@@ -211,6 +220,64 @@
     fruit = { ...p, emoji: FRUIT_EMOJIS[Math.floor(Math.random() * FRUIT_EMOJIS.length)] };
   }
 
+  function spawnFireball() {
+    const head = snake[0];
+    clearInterval(fireballMoveID);
+    const useRow = Math.random() < 0.5;
+    if (useRow) {
+      const fx = head.x < COLS / 2 ? COLS - 1 : 0;
+      fireball = { x: fx, y: head.y, dx: fx === 0 ? 1 : -1, dy: 0 };
+    } else {
+      const fy = head.y < ROWS / 2 ? ROWS - 1 : 0;
+      fireball = { x: head.x, y: fy, dx: 0, dy: fy === 0 ? 1 : -1 };
+    }
+    fireballMoveID = setInterval(moveFireball, SPEED.medium);
+    render();
+  }
+
+  function moveFireball() {
+    if (!fireball || gameState !== 'playing') return;
+    fireball.x += fireball.dx;
+    fireball.y += fireball.dy;
+    if (fireball.x < 0 || fireball.x >= COLS || fireball.y < 0 || fireball.y >= ROWS) {
+      fireball = null;
+      clearInterval(fireballMoveID);
+      fireballMoveID = null;
+      render();
+      return;
+    }
+    if (snake.some(s => s.x === fireball.x && s.y === fireball.y)) {
+      clearInterval(loop);
+      stopFireballTimer();
+      fireball = null;
+      if (score > highscore) highscore = score;
+      if (qualifiesForTopTen(score)) {
+        gameState = 'nameinput';
+        render();
+        showNameInput();
+      } else {
+        gameState = 'gameover';
+        render();
+      }
+      return;
+    }
+    render();
+  }
+
+  function startFireballTimer() {
+    if (fireballInterval === 0) return;
+    fireballTimerID = setInterval(() => {
+      if (gameState === 'playing') spawnFireball();
+    }, fireballInterval * 1000);
+  }
+
+  function stopFireballTimer() {
+    clearInterval(fireballTimerID);
+    clearInterval(fireballMoveID);
+    fireballTimerID = null;
+    fireballMoveID = null;
+  }
+
   function tick() {
     dir = { ...nextDir };
     const head = {
@@ -218,8 +285,10 @@
       y: (snake[0].y + dir.y + ROWS) % ROWS,
     };
 
-    if (snake.some(s => s.x === head.x && s.y === head.y) || isOnWall(head)) {
+    if (snake.some(s => s.x === head.x && s.y === head.y) || isOnWall(head) || (fireball && head.x === fireball.x && head.y === fireball.y)) {
       clearInterval(loop);
+      stopFireballTimer();
+      fireball = null;
       if (score > highscore) highscore = score;
       if (qualifiesForTopTen(score)) {
         gameState = 'nameinput';
@@ -237,6 +306,8 @@
       let pts = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
       if (wallEnabled) pts += 1;
       if (wallEnabled && wallMoving) pts += 1;
+      if (fireballInterval === 15) pts += 1;
+      if (fireballInterval === 10) pts += 2;
       score += pts;
       C.snake = randomColor();
       if (score > highscore) highscore = score;
@@ -276,6 +347,7 @@
     drawHUD();
     drawGrid();
     drawFruit();
+    drawFireball();
     drawSnake();
     drawWall();
 
@@ -338,6 +410,16 @@
     ctx.restore();
   }
 
+  function drawFireball() {
+    if (!fireball) return;
+    ctx.save();
+    ctx.font         = '18px sans-serif';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔥', fireball.x * CELL + CELL / 2, SCORE_H + fireball.y * CELL + CELL / 2);
+    ctx.restore();
+  }
+
   function drawSnake() {
     ctx.fillStyle = C.snake;
     for (const s of snake) {
@@ -374,13 +456,17 @@
     ctx.textAlign = 'center';
     ctx.font      = 'bold 28px monospace';
     ctx.fillStyle = C.gold;
-    ctx.fillText('TOP 10!', W / 2, H / 2 - 50);
+    ctx.fillText('TOP 10!', W / 2, H / 2 - 60);
     ctx.font      = '20px monospace';
     ctx.fillStyle = C.text;
-    ctx.fillText('Score: ' + score, W / 2, H / 2 - 16);
-    ctx.font      = '14px monospace';
+    ctx.fillText('Score: ' + score, W / 2, H / 2 - 24);
+    ctx.font      = '15px monospace';
+    ctx.fillStyle = C.snake;
+    ctx.fillText('➤ Enter your name above', W / 2, H / 2 + 18);
+    ctx.font      = '13px monospace';
     ctx.fillStyle = C.dim;
-    ctx.fillText('Type your name and press ENTER', W / 2, H / 2 + 22);
+    ctx.fillText('Tap here if keyboard disappears', W / 2, H / 2 + 48);
+    ctx.fillText('Press ENTER to confirm', W / 2, H / 2 + 68);
   }
 
   function drawGameOver() {
@@ -415,7 +501,13 @@
   function diffButtonRect(i) {
     const totalW = 3 * 110 + 2 * 20;
     const startX = (W - totalW) / 2;
-    return { x: startX + i * 130, y: 328, w: 110, h: 32 };
+    return { x: startX + i * 130, y: 322, w: 110, h: 32 };
+  }
+
+  function fireballButtonRect(i) {
+    const totalW = 3 * 90 + 2 * 16;
+    const startX = (W - totalW) / 2;
+    return { x: startX + i * 106, y: 536, w: 90, h: 32 };
   }
 
   function twoButtonRect(i, y) {
@@ -473,7 +565,7 @@
     // Difficulty
     ctx.font      = '17px monospace';
     ctx.fillStyle = C.text;
-    ctx.fillText('Difficulty:', W / 2, 300);
+    ctx.fillText('Difficulty:', W / 2, 296);
 
     DIFFS.forEach((d, i) => {
       const r   = diffButtonRect(i);
@@ -493,27 +585,48 @@
     // Wall toggle
     ctx.font      = '17px monospace';
     ctx.fillStyle = C.text;
-    ctx.fillText('Wall:', W / 2, 390);
-    drawTwoButtons(['On', 'Off'], wallEnabled ? 0 : 1, 410, false);
+    ctx.fillText('Wall:', W / 2, 378);
+    drawTwoButtons(['On', 'Off'], wallEnabled ? 0 : 1, 396, false);
 
     // Wall movement toggle
     ctx.font      = '17px monospace';
     ctx.fillStyle = wallEnabled ? C.text : '#444';
-    ctx.fillText('Wall moves:', W / 2, 462);
-    drawTwoButtons(['Yes', 'No'], wallMoving ? 0 : 1, 482, !wallEnabled);
+    ctx.fillText('Wall moves:', W / 2, 444);
+    drawTwoButtons(['Yes', 'No'], wallMoving ? 0 : 1, 462, !wallEnabled);
+
+    // Fireball toggle
+    ctx.font      = '17px monospace';
+    ctx.fillStyle = C.text;
+    ctx.fillText('Fireball 🔥:', W / 2, 518);
+
+    FIREBALL_OPTS.forEach((opt, i) => {
+      const r   = fireballButtonRect(i);
+      const sel = fireballInterval === opt;
+      ctx.fillStyle   = sel ? (opt === 0 ? C.snake : '#ff4500') : '#1a1a1a';
+      ctx.strokeStyle = sel ? (opt === 0 ? C.snake : '#ff4500') : '#3a3a3a';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, 4);
+      ctx.fill();
+      if (!sel) ctx.stroke();
+      ctx.font      = '14px monospace';
+      ctx.fillStyle = sel ? (opt === 0 ? C.bg : '#fff') : C.dim;
+      ctx.fillText(FIREBALL_LABELS[i], r.x + r.w / 2, r.y + 21);
+    });
 
     // Points hint
     const pts = (difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3)
               + (wallEnabled ? 1 : 0)
-              + (wallEnabled && wallMoving ? 1 : 0);
+              + (wallEnabled && wallMoving ? 1 : 0)
+              + (fireballInterval === 15 ? 1 : fireballInterval === 10 ? 2 : 0);
     ctx.font      = '13px monospace';
     ctx.fillStyle = C.gold;
-    ctx.fillText('Points per fruit: ' + pts, W / 2, 535);
+    ctx.fillText('Points per fruit: ' + pts, W / 2, 590);
 
     // Controls
     ctx.fillStyle = C.dim;
-    ctx.fillText('Controls: Arrow keys / WASD / Swipe', W / 2, 560);
-    ctx.fillText('Pause: P or Space', W / 2, 578);
+    ctx.fillText('Controls: Arrow keys / WASD / Swipe', W / 2, 612);
+    ctx.fillText('Pause: P or Space', W / 2, 630);
 
     // Start button
     const sb = startButtonRect();
@@ -533,7 +646,7 @@
   }
 
   function startButtonRect() {
-    return { x: W / 2 - 100, y: 605, w: 200, h: 42 };
+    return { x: W / 2 - 100, y: 648, w: 200, h: 42 };
   }
 
   // ── Input ──────────────────────────────────────────────────
@@ -566,6 +679,7 @@
           if (dir.x !== -1) nextDir = { x:  1, y:  0 }; break;
         case 'p': case 'P': case ' ':
           clearInterval(loop);
+          stopFireballTimer();
           gameState = 'paused';
           render();
           break;
@@ -576,6 +690,8 @@
     if (gameState === 'paused' && (e.key === 'p' || e.key === 'P' || e.key === ' ')) {
       gameState = 'playing';
       loop = setInterval(tick, SPEED[difficulty]);
+      startFireballTimer();
+      if (fireball) fireballMoveID = setInterval(moveFireball, SPEED.medium);
       render();
       return;
     }
@@ -596,19 +712,25 @@
       }
     });
     [true, false].forEach((val, i) => {
-      const r = twoButtonRect(i, 410);
+      const r = twoButtonRect(i, 396);
       if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
         wallEnabled = val; handled = true;
       }
     });
     if (wallEnabled) {
       [true, false].forEach((val, i) => {
-        const r = twoButtonRect(i, 482);
+        const r = twoButtonRect(i, 462);
         if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
           wallMoving = val; handled = true;
         }
       });
     }
+    FIREBALL_OPTS.forEach((opt, i) => {
+      const r = fireballButtonRect(i);
+      if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+        fireballInterval = opt; handled = true;
+      }
+    });
     const sb = startButtonRect();
     if (mx >= sb.x && mx <= sb.x + sb.w && my >= sb.y && my <= sb.y + sb.h) {
       startGame(); return true;
@@ -618,6 +740,7 @@
   }
 
   canvas.addEventListener('click', e => {
+    if (gameState === 'nameinput') { nameInput.focus(); return; }
     if (gameState !== 'start') return;
     const rect = canvas.getBoundingClientRect();
     const mx   = (e.clientX - rect.left) * (W / rect.width);
@@ -654,7 +777,7 @@
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
 
-    if (gameState === 'nameinput') return;
+    if (gameState === 'nameinput') { nameInput.focus(); return; }
 
     if (gameState === 'gameover') { gameState = 'start'; render(); return; }
     if (gameState === 'start') {
@@ -667,6 +790,8 @@
     if (gameState === 'paused')   {
       gameState = 'playing';
       loop = setInterval(tick, SPEED[difficulty]);
+      startFireballTimer();
+      if (fireball) fireballMoveID = setInterval(moveFireball, SPEED.medium);
       render();
       return;
     }
