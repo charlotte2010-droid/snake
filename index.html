@@ -68,28 +68,39 @@
 
   // ── Scores ─────────────────────────────────────────────────
 
-  function loadScores() {
-    try { return JSON.parse(localStorage.getItem('snake_scores') || '[]'); }
-    catch { return []; }
-  }
+  let cachedScores = [];
 
-  function saveScores(arr) {
-    localStorage.setItem('snake_scores', JSON.stringify(arr));
+  function loadScores() { return cachedScores; }
+
+  async function loadScoresFromAPI() {
+    try {
+      const res = await fetch('/api/scores');
+      if (res.ok) cachedScores = await res.json();
+    } catch {}
   }
 
   function qualifiesForTopTen(sc) {
     if (sc <= 0) return false;
-    const list = loadScores();
-    return list.length < 10 || sc > list[list.length - 1].score;
+    return cachedScores.length < 10 || sc > cachedScores[cachedScores.length - 1].score;
   }
 
-  function addScore(name, sc) {
-    const list = loadScores();
-    list.push({ name: name || 'AAA', score: sc });
-    list.sort((a, b) => b.score - a.score);
-    const rank = list.findIndex(e => e.name === name && e.score === sc) + 1;
-    list.splice(10);
-    saveScores(list);
+  async function submitScore(name, sc) {
+    try {
+      const res = await fetch('/api/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, score: sc }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        cachedScores = data.scores;
+        return data.rank;
+      }
+    } catch {}
+    cachedScores.push({ name: name || 'AAA', score: sc });
+    cachedScores.sort((a, b) => b.score - a.score);
+    const rank = cachedScores.findIndex(e => e.name === name && e.score === sc) + 1;
+    cachedScores.splice(10);
     return rank;
   }
 
@@ -108,13 +119,13 @@
     nameInput.style.display = 'none';
   }
 
-  nameInput.addEventListener('keydown', e => {
+  nameInput.addEventListener('keydown', async e => {
     if (e.key === 'Enter') {
       e.preventDefault();
       const name = nameInput.value.trim() || 'AAA';
       hideNameInput();
-      lastRank  = addScore(name, score);
-      highscore = loadScores()[0].score;
+      lastRank  = await submitScore(name, score);
+      highscore = cachedScores.length ? cachedScores[0].score : highscore;
       gameState = 'gameover';
       render();
     }
@@ -128,9 +139,9 @@
 
   // ── Game logic ─────────────────────────────────────────────
 
-  function init() {
-    const list = loadScores();
-    highscore  = list.length ? list[0].score : 0;
+  async function init() {
+    await loadScoresFromAPI();
+    highscore   = cachedScores.length ? cachedScores[0].score : 0;
     difficulty  = 'medium';
     wallEnabled = true;
     wallMoving  = true;
